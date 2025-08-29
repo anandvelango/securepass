@@ -37,6 +37,16 @@ router.put('/:id', requireAuth, async (req: any, res) => {
   res.json(updated);
 });
 
+router.get('/:id', requireAuth, async (req: any, res) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+  const password = await prisma.password.findFirst({ where: { id, userId } });
+  if (!password) {
+    return res.status(404).json({ error: 'Password not found' });
+  }
+  res.json(password);
+});
+
 router.delete('/:id', requireAuth, async (req: any, res) => {
   const userId = req.user.id;
   const { id } = req.params;
@@ -44,5 +54,4 @@ router.delete('/:id', requireAuth, async (req: any, res) => {
   res.json({ success: true });
 });
 
-export const authRoutes = router; // in routes.ts
-export const passwordRoutes = router; // in passwords.ts
+export const passwordRoutes = router;

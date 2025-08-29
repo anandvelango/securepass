@@ -21,8 +21,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { PasswordEntry } from '../models/Password';
-import { PasswordManager } from '../services/PasswordManager';
-import { StorageServiceFactory } from '../services/StorageService';
+import { passwordAPIService } from '../services/PasswordAPIService';
 
 /**
  * Bridge class between OOP services and React hooks
@@ -39,8 +38,6 @@ import { StorageServiceFactory } from '../services/StorageService';
  * - Maintains separation between business logic and UI state
  */
 export class PasswordManagerHook {
-  /** Core password management service instance */
-  private passwordManager: PasswordManager;
   /** React state setter for triggering re-renders */
   private setPasswords: React.Dispatch<React.SetStateAction<PasswordEntry[]>>;
 
@@ -55,11 +52,6 @@ export class PasswordManagerHook {
    * - Stores React state setter for future updates
    */
   constructor(setPasswords: React.Dispatch<React.SetStateAction<PasswordEntry[]>>) {
-    // Use factory to create appropriate storage service
-    const storageService = StorageServiceFactory.createStorageService('localStorage');
-    // Get singleton password manager instance
-    this.passwordManager = PasswordManager.getInstance(storageService);
-    // Store React state setter for synchronization
     this.setPasswords = setPasswords;
   }
 
@@ -69,9 +61,14 @@ export class PasswordManagerHook {
    * Called after operations that modify password data
    * Ensures React components have latest data for rendering
    */
-  public loadPasswords(): void {
-    const passwords = this.passwordManager.getAllPasswords();
-    this.setPasswords(passwords);
+  public async loadPasswords(): Promise<void> {
+    try {
+      const passwords = await passwordAPIService.getAllPasswords();
+      this.setPasswords(passwords);
+    } catch (error) {
+      console.error('Failed to load passwords:', error);
+      this.setPasswords([]);
+    }
   }
 
   /**
@@ -85,10 +82,9 @@ export class PasswordManagerHook {
    * 2. Refresh React state
    * 3. Return operation result
    */
-  public addPassword(passwordData: Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>): PasswordEntry {
-    const newPassword = this.passwordManager.addPassword(passwordData);
-    // Sync React state after modification
-    this.loadPasswords();
+  public async addPassword(passwordData: Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<PasswordEntry> {
+    const newPassword = await passwordAPIService.addPassword(passwordData);
+    await this.loadPasswords();
     return newPassword;
   }
 
@@ -101,14 +97,14 @@ export class PasswordManagerHook {
    * 
    * Conditional state sync only occurs if update succeeds
    */
-  public updatePassword(
+  public async updatePassword(
     id: string, 
     passwordData: Partial<Pick<PasswordEntry, 'website' | 'username' | 'password' | 'notes'>>
-  ): PasswordEntry | null {
-    const updatedPassword = this.passwordManager.updatePassword(id, passwordData);
+  ): Promise<PasswordEntry | null> {
+    const updatedPassword = await passwordAPIService.updatePassword(id, passwordData);
     // Only sync state if update was successful
     if (updatedPassword) {
-      this.loadPasswords();
+      await this.loadPasswords();
     }
     return updatedPassword;
   }
@@ -121,11 +117,10 @@ export class PasswordManagerHook {
    * 
    * Conditional state sync based on operation success
    */
-  public deletePassword(id: string): boolean {
-    const success = this.passwordManager.deletePassword(id);
-    // Only sync state if deletion was successful
+  public async deletePassword(id: string): Promise<boolean> {
+    const success = await passwordAPIService.deletePassword(id);
     if (success) {
-      this.loadPasswords();
+      await this.loadPasswords();
     }
     return success;
   }
@@ -139,8 +134,8 @@ export class PasswordManagerHook {
    * Read-only operation doesn't require state sync
    * Returns filtered data directly from service
    */
-  public searchPasswords(searchTerm: string): PasswordEntry[] {
-    return this.passwordManager.searchPasswords(searchTerm);
+  public async searchPasswords(searchTerm: string): Promise<PasswordEntry[]> {
+    return await passwordAPIService.searchPasswords(searchTerm);
   }
 
   /**
@@ -151,8 +146,8 @@ export class PasswordManagerHook {
    * 
    * Read-only operation for direct data access
    */
-  public getPasswordById(id: string): PasswordEntry | null {
-    return this.passwordManager.getPasswordById(id);
+  public async getPasswordById(id: string): Promise<PasswordEntry | null> {
+    return await passwordAPIService.getPasswordById(id);
   }
 }
 
@@ -191,7 +186,7 @@ export const usePasswordManager = () => {
    * - Populates React state for first render
    */
   useEffect(() => {
-    passwordManagerHook.loadPasswords();
+    passwordManagerHook.loadPasswords().catch(console.error);
   }, [passwordManagerHook]);
 
   /**
@@ -200,8 +195,8 @@ export const usePasswordManager = () => {
    * useCallback prevents function recreation unless dependencies change
    * Stable reference prevents unnecessary child component re-renders
    */
-  const addPassword = useCallback((passwordData: Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
-    return passwordManagerHook.addPassword(passwordData);
+  const addPassword = useCallback(async (passwordData: Omit<PasswordEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
+    return await passwordManagerHook.addPassword(passwordData);
   }, [passwordManagerHook]);
 
   /**
@@ -209,11 +204,11 @@ export const usePasswordManager = () => {
    * 
    * Stable reference for consistent component behavior
    */
-  const updatePassword = useCallback((
+  const updatePassword = useCallback(async (
     id: string, 
     passwordData: Partial<Pick<PasswordEntry, 'website' | 'username' | 'password' | 'notes'>>
   ) => {
-    return passwordManagerHook.updatePassword(id, passwordData);
+    return await passwordManagerHook.updatePassword(id, passwordData);
   }, [passwordManagerHook]);
 
   /**
@@ -221,8 +216,8 @@ export const usePasswordManager = () => {
    * 
    * Stable reference prevents unnecessary re-renders
    */
-  const deletePassword = useCallback((id: string) => {
-    return passwordManagerHook.deletePassword(id);
+  const deletePassword = useCallback(async (id: string) => {
+    return await passwordManagerHook.deletePassword(id);
   }, [passwordManagerHook]);
 
   /**
@@ -230,8 +225,8 @@ export const usePasswordManager = () => {
    * 
    * Read-only operation with stable reference
    */
-  const searchPasswords = useCallback((searchTerm: string) => {
-    return passwordManagerHook.searchPasswords(searchTerm);
+  const searchPasswords = useCallback(async (searchTerm: string) => {
+    return await passwordManagerHook.searchPasswords(searchTerm);
   }, [passwordManagerHook]);
 
   /**
@@ -239,8 +234,8 @@ export const usePasswordManager = () => {
    * 
    * Utility function with stable reference
    */
-  const getPasswordById = useCallback((id: string) => {
-    return passwordManagerHook.getPasswordById(id);
+  const getPasswordById = useCallback(async (id: string) => {
+    return await passwordManagerHook.getPasswordById(id);
   }, [passwordManagerHook]);
 
   /**

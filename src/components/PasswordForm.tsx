@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Shuffle } from 'lucide-react';
-import { PasswordEntry } from '../models/Password';
+import { PasswordEntry, IPasswordEntry } from '../models/Password';
 import { SecurePasswordGenerator } from '../services/PasswordGenerator';
 
 interface PasswordFormProps {
@@ -39,7 +39,20 @@ export const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSubmit, 
     e.preventDefault();
     if (!formData.website || !formData.username || !formData.password) return;
     
-    onSubmit(formData);
+    // Check password strength before allowing submission
+    const strength = passwordGenerator.calculateStrength(formData.password);
+    if (strength < 30) {
+      alert('Password is too weak! Please choose a stronger password with at least 8 characters including uppercase, lowercase, numbers, and symbols.');
+      return;
+    }
+    
+    const passwordEntry = new PasswordEntry(
+      formData.website,
+      formData.username,
+      formData.password,
+      formData.notes
+    );
+    onSubmit(passwordEntry);
   };
 
   const generatePassword = () => {
@@ -154,6 +167,11 @@ export const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSubmit, 
                     style={{ width: `${passwordStrength}%` }}
                   />
                 </div>
+                {passwordStrength < 30 && (
+                  <p className="text-red-400 text-xs mt-1">
+                    ⚠️ Password is too weak. Use at least 8 characters with uppercase, lowercase, numbers, and symbols.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -183,7 +201,12 @@ export const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSubmit, 
             </button>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg transition-colors"
+              disabled={passwordStrength < 30}
+              className={`px-6 py-2 rounded-lg transition-colors ${
+                passwordStrength < 30 
+                  ? 'bg-slate-600 text-slate-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-500 text-white'
+              }`}
             >
               {password ? 'Update' : 'Add'} Password
             </button>

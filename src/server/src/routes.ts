@@ -18,7 +18,7 @@ router.get(
 
 router.get('/auth/logout', (req, res) => {
   req.logout(() => {
-    res.redirect('http://localhost:5173/login');
+    res.json({ success: true });
   });
 });
 
@@ -26,7 +26,7 @@ router.get('/auth/user', (req, res) => {
   if (req.isAuthenticated()) {
     res.json(req.user);
   } else {
-    res.status(401).json({ user: null });
+    res.json(null);
   }
 });
 
